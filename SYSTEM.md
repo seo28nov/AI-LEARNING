@@ -132,13 +132,14 @@ graph TB
 ```
 #### 2.3.2 Instructor Journey
 ```
-1. Landing → Register → Email Verify → Role: Instructor
-2. Profile Setup → Teaching Experience → Subject Expertise → Portfolio
-3. Instructor Dashboard → Course Creation → Content Development → AI Assistance
-4. Course Setup → Pricing → Visibility → Publishing → Student Management
-5. Analytics Dashboard → Student Progress → Revenue Tracking → Course Optimization
-6. Student Communication → Q&A → Feedback → Course Updates
-7. Payout Management → Revenue Reports → Tax Documents
+1. Trang chủ → Đăng ký → Xác thực email → Chọn vai trò: Giảng viên  
+2. Thiết lập hồ sơ → Kinh nghiệm giảng dạy → Chuyên môn → Portfolio  
+3. Bảng điều khiển giảng viên → Tạo khóa học → Phát triển nội dung → Hỗ trợ AI  
+4. Thiết lập khóa học → Giá → Chế độ hiển thị → Xuất bản → Quản lý học viên  
+5. Bảng phân tích → Theo dõi tiến độ học viên → Thống kê doanh thu → Tối ưu khóa học  
+6. Giao tiếp với học viên → Hỏi & Đáp → Nhận phản hồi → Cập nhật nội dung  
+7. Quản lý thanh toán → Báo cáo doanh thu 
+
 ```
 
 #### 2.3.3 Admin Journey
