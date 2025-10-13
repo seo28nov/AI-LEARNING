@@ -10,7 +10,6 @@ BELEARNINGAI là bộ khung FastAPI mới tinh cho nền tảng học tập AI t
 - **Instructor**: quản lý lớp, sao chép/tạo khóa, tạo quiz/bài tập, analytics, thông báo.
 - **Admin**: quản trị người dùng & phân quyền, kiểm duyệt khóa, giám sát hệ thống, broadcast.
 
-Những tính năng ngoài phạm vi mục 1–7 của `HE_THONG.md` (payment, livestream, mobile native, chứng chỉ) vẫn được giữ ở mức placeholder để tránh phân tán.
 
 ## 2. Cấu trúc thư mục
 
