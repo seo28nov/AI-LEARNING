@@ -1,9 +1,23 @@
 """Controller xác thực người dùng."""
-from fastapi import Request
+from fastapi import Request, HTTPException, status
 
 from models.models import LoginRequest, RefreshRequest, RegisterRequest, TokenResponse, UserResponse
 from schemas.common import MessageResponse
-from services.auth_service import login, logout, refresh_token, register
+from services.auth_service import (
+    login,
+    logout,
+    refresh_token,
+    register,
+    request_email_verification,
+    request_password_reset,
+    reset_password,
+    verify_email,
+)
+from services.user_service import (
+    get_user_profile,
+    update_user_profile,
+    change_user_password
+)
 
 
 async def handle_login(payload: LoginRequest, request: Request) -> TokenResponse:
@@ -30,43 +44,100 @@ async def handle_logout(payload: RefreshRequest, request: Request) -> None:
     await logout(payload, request)
 
 
-async def handle_get_profile(current_user: dict) -> MessageResponse:
-    """Placeholder trả thông tin người dùng hiện tại."""
+async def handle_get_profile(current_user: dict) -> dict:
+    """Lấy thông tin người dùng hiện tại."""
 
-    user_id = current_user.get("sub", "unknown")
-    return MessageResponse(message=f"Placeholder: thông tin người dùng {user_id}")
+    user_id = current_user.get("sub")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Không xác định được user"
+        )
+    
+    return await get_user_profile(user_id)
 
 
-async def handle_update_profile(payload: dict, current_user: dict) -> MessageResponse:
-    """Placeholder cập nhật hồ sơ người dùng."""
+async def handle_update_profile(payload: dict, current_user: dict) -> dict:
+    """Cập nhật hồ sơ người dùng."""
 
-    _ = payload, current_user
-    return MessageResponse(message="Placeholder: cập nhật hồ sơ thành công")
+    user_id = current_user.get("sub")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Không xác định được user"
+        )
+    
+    return await update_user_profile(user_id, payload)
 
 
 async def handle_update_password(payload: dict, current_user: dict) -> MessageResponse:
-    """Placeholder đổi mật khẩu người dùng."""
+    """Đổi mật khẩu người dùng."""
 
-    _ = payload, current_user
-    return MessageResponse(message="Placeholder: mật khẩu đã được đổi")
+    user_id = current_user.get("sub")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Không xác định được user"
+        )
+    
+    current_password = payload.get("current_password")
+    new_password = payload.get("new_password")
+    
+    if not current_password or not new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Thiếu mật khẩu hiện tại hoặc mật khẩu mới"
+        )
+    
+    await change_user_password(user_id, current_password, new_password)
+    return MessageResponse(message="Mật khẩu đã được đổi thành công")
 
 
 async def handle_forgot_password(payload: dict) -> MessageResponse:
-    """Placeholder gửi email quên mật khẩu."""
-
-    _ = payload
-    return MessageResponse(message="Placeholder: đã gửi hướng dẫn đặt lại mật khẩu")
+    """Gửi email reset mật khẩu."""
+    
+    email = payload.get("email")
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email không hợp lệ"
+        )
+    
+    await request_password_reset(email)
+    return MessageResponse(message="Nếu email tồn tại, link reset mật khẩu đã được gửi")
 
 
 async def handle_reset_password(payload: dict) -> MessageResponse:
-    """Placeholder đặt lại mật khẩu từ token."""
+    """Đặt lại mật khẩu từ token."""
+    
+    token = payload.get("token")
+    new_password = payload.get("new_password")
+    
+    if not token or not new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token hoặc mật khẩu mới không hợp lệ"
+        )
+    
+    await reset_password(token, new_password)
+    return MessageResponse(message="Mật khẩu đã được đặt lại thành công. Vui lòng đăng nhập lại")
 
-    _ = payload
-    return MessageResponse(message="Placeholder: mật khẩu đã được đặt lại")
+
+async def handle_verify_email(payload: dict) -> UserResponse:
+    """Xác thực email người dùng."""
+    
+    token = payload.get("token")
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token không hợp lệ"
+        )
+    
+    return await verify_email(token)
 
 
-async def handle_verify_email(payload: dict) -> MessageResponse:
-    """Placeholder xác thực email người dùng."""
-
-    _ = payload
-    return MessageResponse(message="Placeholder: email đã được xác thực")
+async def handle_resend_verification(user_id: str) -> MessageResponse:
+    """Gửi lại email xác thực."""
+    
+    await request_email_verification(user_id)
+    return MessageResponse(message="Email xác thực đã được gửi lại")

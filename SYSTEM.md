@@ -104,13 +104,7 @@
 - ✅ Upload và xử lý tài liệu
 - ✅ Hệ thống thông báo
 
-**Ngoài phạm vi (Out-of-scope):**
-- ❌ Video conferencing trực tiếp
-- ❌ Marketplace thanh toán cho khóa học (giai đoạn đầu)
-- ❌ Mobile app native (chỉ web responsive)
-- ❌ Gamification nâng cao (badges, leaderboard)
-- ❌ Certificate chính thức được công nhận
-- ❌ Tích hợp hệ thống LMS của bên thứ ba
+
 
 #### 1.4.2 Phạm vi kỹ thuật
 - **Frontend**: Web application (React + TypeScript)
@@ -2193,24 +2187,173 @@ PUT    /api/v1/courses/{course_id}/chapters/{chapter_id} # Sửa chương
 DELETE /api/v1/courses/{course_id}/chapters/{chapter_id} # Xóa chương
 ```
 
+#### 7.2.5 RAG Indexing Management (Quản lý Index cho RAG AI)
+```
+# Course Indexing - Tạo embeddings để sử dụng cho AI Chat RAG
+POST   /api/v1/courses/{course_id}/index       # Index nội dung khóa học vào FAISS Vector DB
+POST   /api/v1/courses/{course_id}/reindex     # Reindex (xóa cũ, index lại) khi content thay đổi
+POST   /api/v1/courses/admin/index-all         # Index tất cả courses (Admin only)
+```
+
+**Chi tiết ví dụ POST /api/v1/courses/{course_id}/index:**
+```json
+// Request
+POST /api/v1/courses/674abc123def456789/index
+Authorization: Bearer {instructor_token}
+
+// Response (200 OK)
+{
+  "success": true,
+  "message": "Khóa học đã được index thành công",
+  "data": {
+    "course_id": "674abc123def456789",
+    "course_title": "Lập trình Python từ A-Z",
+    "chunks_created": 15,           // Số chunks được tạo
+    "vectors_stored": 15,            // Số vectors được lưu
+    "embedding_dimension": 768,      // Dimension của embeddings
+    "processing_time_ms": 3500,
+    "indexed_at": "2025-10-16T10:30:00Z"
+  }
+}
+
+// Response khi lỗi (403 Forbidden)
+{
+  "success": false,
+  "error": "Forbidden",
+  "message": "Bạn không có quyền index khóa học này"
+}
+```
+
+**Chi tiết ví dụ POST /api/v1/courses/admin/index-all:**
+```json
+// Request (Admin only)
+POST /api/v1/courses/admin/index-all
+Authorization: Bearer {admin_token}
+
+// Response (200 OK)
+{
+  "success": true,
+  "message": "Đã index 3/3 khóa học",
+  "data": {
+    "total": 3,
+    "successful": 3,
+    "failed": 0,
+    "courses_indexed": [
+      {
+        "course_id": "674abc123def456789",
+        "title": "Python từ A-Z",
+        "chunks": 15
+      },
+      {
+        "course_id": "674abc456def123789",
+        "title": "FastAPI Web Development",
+        "chunks": 10
+      },
+      {
+        "course_id": "674abc789def456123",
+        "title": "Data Science với Pandas",
+        "chunks": 8
+      }
+    ],
+    "errors": null,
+    "total_chunks": 33,
+    "total_vectors": 33,
+    "processing_time_ms": 12000
+  }
+}
+```
+
 ### 7.3 Enrollment & Learning Progress (Đăng ký và tiến độ học tập)
 
 ```
-# Quản lý đăng ký khóa học (miễn phí)
-POST   /api/v1/enrollments/{course_id}         # Đăng ký tham gia khóa học miễn phí
+# Quản lý đăng ký khóa học (miễn phí) - Học viên tự đăng ký
+POST   /api/v1/enrollments/{course_id}         # Đăng ký tham gia khóa học công khai miễn phí
 DELETE /api/v1/enrollments/{course_id}         # Hủy đăng ký, rời khỏi khóa học
 GET    /api/v1/enrollments                     # Danh sách tất cả khóa học đã đăng ký
 GET    /api/v1/enrollments/{course_id}/progress # Xem tiến độ học tập chi tiết
 POST   /api/v1/enrollments/{course_id}/progress # Cập nhật tiến độ khi hoàn thành bài học
 
-# Quản lý lớp học (Class Management)
-GET    /api/v1/classes                         # Danh sách lớp học (instructor)
-POST   /api/v1/classes                         # Tạo lớp học mới từ khóa học có sẵn
+# Quản lý lớp học (Class Management) - Giảng viên quản lý
+# LƯU Ý: Lớp học (Class) ≠ Khóa học (Course)
+# - Khóa học: Nội dung bài giảng (chapters, lessons, materials)
+# - Lớp học: Nhóm học viên học cùng 1 khóa học, do giảng viên quản lý
+GET    /api/v1/classes                         # Danh sách lớp học của giảng viên
+POST   /api/v1/classes                         # Tạo lớp học MỚI từ KHÓA HỌC CÓ SẴN (cần course_id)
 GET    /api/v1/classes/{class_id}              # Chi tiết lớp học và danh sách học viên
-POST   /api/v1/classes/{class_id}/invite       # Mời học viên vào lớp (email/link)
+PUT    /api/v1/classes/{class_id}              # Cập nhật thông tin lớp học
+DELETE /api/v1/classes/{class_id}              # Xóa lớp học
+POST   /api/v1/classes/{class_id}/invite       # Tạo mã mời hoặc gửi email mời học viên
+POST   /api/v1/classes/join                    # Học viên tham gia lớp bằng mã mời
 DELETE /api/v1/classes/{class_id}/students/{student_id} # Xóa học viên khỏi lớp
+GET    /api/v1/classes/{class_id}/students     # Danh sách học viên trong lớp
 GET    /api/v1/classes/{class_id}/analytics    # Thống kê tiến độ lớp học
 
+```
+
+**Chi tiết ví dụ POST /api/v1/classes - Tạo lớp học từ khóa học có sẵn:**
+```json
+// Request Body
+{
+  "name": "Lớp Python Cơ bản - K01/2025",          // Tên lớp học
+  "course_id": "674abc123def456789",               // ID khóa học có sẵn (BẮT BUỘC)
+  "description": "Lớp học Python dành cho sinh viên năm nhất",
+  "max_students": 30,                              // Giới hạn số lượng học viên
+  "start_date": "2025-11-01T00:00:00Z",           // Ngày bắt đầu
+  "end_date": "2025-12-31T23:59:59Z",             // Ngày kết thúc
+  "auto_enroll": false,                            // Tự động duyệt học viên
+  "allow_late_join": true,                         // Cho phép tham gia muộn
+  "settings": {
+    "discussion_enabled": true,
+    "ai_tutor_enabled": true
+  }
+}
+
+// Response (201 Created)
+{
+  "success": true,
+  "message": "Tạo lớp học thành công",
+  "data": {
+    "class": {
+      "id": "674class001",
+      "name": "Lớp Python Cơ bản - K01/2025",
+      "course_id": "674abc123def456789",            // Khóa học gốc
+      "instructor_id": "674instructor001",
+      "class_code": "ABC12XYZ",                     // Mã lớp để học viên tham gia
+      "current_students": 0,
+      "max_students": 30,
+      "status": "upcoming",                         // upcoming/active/completed
+      "start_date": "2025-11-01T00:00:00Z",
+      "end_date": "2025-12-31T23:59:59Z",
+      "created_at": "2025-10-16T10:00:00Z"
+    }
+  }
+}
+```
+
+**Chi tiết ví dụ POST /api/v1/classes/join - Học viên tham gia lớp:**
+```json
+// Request Body
+{
+  "join_code": "ABC12XYZ"                          // Mã lớp do giảng viên cung cấp
+}
+
+// Response (200 OK)
+{
+  "success": true,
+  "message": "Tham gia lớp học thành công",
+  "data": {
+    "class": {
+      "id": "674class001",
+      "name": "Lớp Python Cơ bản - K01/2025",
+      "course_id": "674abc123def456789",
+      "instructor_name": "Nguyễn Văn Giảng",
+      "current_students": 15,
+      "max_students": 30,
+      "status": "active"
+    },
+    "enrollment_id": "674enroll001"                // ID enrollment tự động tạo
+  }
+}
 ```
 
 ### 7.5 Quiz & Assessment 
@@ -2275,6 +2418,130 @@ POST   /api/v1/ai/quiz-generation              # Tạo bài kiểm tra tự đ�
 POST   /api/v1/ai/course-recommendations       # AI gợi ý khóa học phù hợp với người dùng
 POST   /api/v1/ai/learning-path                # Tạo lộ trình học tập cá nhân hóa
 ```
+
+### 7.7.1 Health Check & System Monitoring (Kiểm tra hệ thống)
+
+```
+# RAG System Health Checks
+GET    /api/v1/health/                         # Health check tổng quan tất cả services
+GET    /api/v1/health/vectordb                 # Kiểm tra FAISS vector database
+GET    /api/v1/health/embeddings               # Kiểm tra Google AI Embedding service
+GET    /api/v1/health/rag-stats                # Thống kê RAG system: courses indexed, vectors
+```
+
+**Chi tiết ví dụ GET /api/v1/health/ - Overall health check:**
+```json
+// Response (200 OK)
+{
+  "success": true,
+  "status": "healthy",                         // healthy | degraded | unhealthy
+  "services": {
+    "mongodb": {
+      "status": "healthy",
+      "service": "MongoDB",
+      "connected": true,
+      "message": "MongoDB hoạt động bình thường"
+    },
+    "vectordb": {
+      "status": "healthy",
+      "service": "FAISS Vector Database",
+      "connected": true,
+      "vector_count": 45,
+      "collection": "courses",
+      "message": "FAISS Vector Database hoạt động bình thường với 45 vectors"
+    },
+    "embeddings": {
+      "status": "healthy",
+      "service": "Google AI Embeddings",
+      "connected": true,
+      "embedding_dimension": 768,
+      "expected_dimension": 768,
+      "model": "models/embedding-001",
+      "message": "Embedding service hoạt động bình thường"
+    }
+  },
+  "message": "Tất cả services hoạt động bình thường",
+  "timestamp": "2025-10-16T10:30:00Z"
+}
+```
+
+**Chi tiết ví dụ GET /api/v1/health/rag-stats - RAG Statistics:**
+```json
+// Response (200 OK)
+{
+  "success": true,
+  "status": "healthy",
+  "rag_system": {
+    "vectordb": {
+      "total_vectors": 45,                     // Tổng số vectors trong FAISS
+      "collection": "courses",                 // Collection name
+      "engine": "FAISS"                       // Vector database engine
+    },
+    "mongodb": {
+      "total_courses": 3,                      // Tổng số courses
+      "published_courses": 3,                  // Courses đã publish
+      "unpublished_courses": 0                 // Courses draft
+    },
+    "indexing": {
+      "indexed_courses": 3,                    // Số courses đã indexed
+      "avg_chunks_per_course": 15.0,           // Trung bình chunks/course
+      "total_chunks": 45                       // Tổng số chunks
+    }
+  },
+  "message": "RAG system hoạt động bình thường",
+  "last_index_time": "2025-10-16T09:00:00Z",
+  "timestamp": "2025-10-16T10:30:00Z"
+}
+```
+
+**Chi tiết ví dụ GET /api/v1/health/vectordb:**
+```json
+// Response khi healthy (200 OK)
+{
+  "success": true,
+  "status": "healthy",
+  "service": "FAISS Vector Database",
+  "connected": true,
+  "vector_count": 45,
+  "collection": "courses",
+  "persist_directory": "./faiss_db",
+  "message": "FAISS Vector Database hoạt động bình thường với 45 vectors"
+}
+
+// Response khi có vấn đề (200 OK - không throw error)
+{
+  "success": false,
+  "status": "unhealthy",
+  "service": "FAISS Vector Database",
+  "connected": false,
+  "error": "Connection timeout",
+  "message": "FAISS Vector Database không hoạt động"
+}
+```
+
+**Chi tiết ví dụ GET /api/v1/health/embeddings:**
+```json
+// Response (200 OK)
+{
+  "success": true,
+  "status": "healthy",
+  "service": "Google AI Embeddings",
+  "connected": true,
+  "embedding_dimension": 768,
+  "expected_dimension": 768,
+  "model": "models/embedding-001",
+  "api_key_status": "valid",
+  "test_query": "Test embedding service",
+  "message": "Embedding service hoạt động bình thường"
+}
+```
+
+**Use cases cho Health Check endpoints:**
+- **Monitoring**: Continuous health monitoring của production system
+- **Debugging**: Nhanh chóng xác định service nào có vấn đề
+- **Status Page**: Hiển thị status trang hệ thống cho users
+- **CI/CD**: Verify services trước khi deploy
+- **Alerting**: Trigger alerts khi services unhealthy
 
 ### 7.8 File Uploads & Management
 
@@ -3372,152 +3639,7 @@ flowchart LR
 - Team Backend gồm 2 thành viên: **Khang** (tập trung Auth, Security, Upload) và **Tuấn Anh** (Course, Enrollment, Analytics), phối hợp chéo review.
 
 
-### 14.2 Kế hoạch chi tiết dạng bảng (định dạng Google Sheet)
 
-> Bảng dưới đây chuyển hóa toàn bộ kế hoạch 13/10 ➝ 13/11 thành định dạng phù hợp để nhập trực tiếp vào Google Sheet.
-
-#### Tuần 1 – Thiết lập nền tảng & Auth cơ bản
-
-| TRẠNG THÁI | MỤC TIÊU LỚN | MỤC TIÊU NHỎ | MÔ TẢ | BẮT ĐẦU | KẾT THÚC | ƯỚC LƯỢNG (h) | NGƯỜI THỰC HIỆN | TIẾN ĐỘ |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Planned | Tuần 1 - Thiết lập nền tảng & Auth | Thiết lập môi trường & tooling | Chuẩn hóa Python env, virtualenv, cấu hình pytest/ruff, xác nhận dependencies. | 13/10/2025 | 13/10/2025 | 6 | Khang | 0% |
-| Planned | Tuần 1 - Thiết lập nền tảng & Auth | Chuẩn bị tài liệu & cấu trúc dự án | Biên soạn tài liệu môi trường, cập nhật `.env.example`, chuẩn hóa tree dự án. | 13/10/2025 | 13/10/2025 | 6 | Tuấn Anh | 0% |
-| Planned | Tuần 1 - Thiết lập nền tảng & Auth | Xây dựng endpoint đăng ký | Implement `POST /api/v1/auth/register`, hashing, validation, chuẩn hóa error map. | 14/10/2025 | 14/10/2025 | 6 | Khang | 0% |
-| Planned | Tuần 1 - Thiết lập nền tảng & Auth | Docker Compose & chỉ mục Mongo | Thiết lập Docker Compose (API, Mongo, Redis), định nghĩa index Mongo chủ đạo. | 14/10/2025 | 14/10/2025 | 6 | Tuấn Anh | 0% |
-| Planned | Tuần 1 - Thiết lập nền tảng & Auth | Hoàn thiện đăng nhập & refresh | Hoàn thiện `POST /api/v1/auth/login`, luồng refresh rotation và revoke token service. | 15/10/2025 | 15/10/2025 | 6 | Khang | 0% |
-| Planned | Tuần 1 - Thiết lập nền tảng & Auth | Seed quyền và tài liệu auth | Viết script seed `roles`, `users` mẫu và tài liệu hóa luồng đăng nhập backend. | 15/10/2025 | 15/10/2025 | 6 | Tuấn Anh | 0% |
-| Planned | Tuần 1 - Thiết lập nền tảng & Auth | GET /auth/me & revoke token | Xây dựng `GET /api/v1/auth/me`, endpoint revoke refresh token, middleware kiểm tra session. | 16/10/2025 | 16/10/2025 | 6 | Khang | 0% |
-| Planned | Tuần 1 - Thiết lập nền tảng & Auth | Tài liệu cấu trúc DB | Xây dựng tài liệu cấu trúc database (users, profiles, refresh_tokens), cập nhật README backend. | 16/10/2025 | 16/10/2025 | 6 | Tuấn Anh | 0% |
-| Planned | Tuần 1 - Thiết lập nền tảng & Auth | Audit log & rate limit auth | Bổ sung audit log, rate limit cơ bản cho `/auth`, cấu hình logging bảo mật. | 17/10/2025 | 17/10/2025 | 6 | Khang | 0% |
-| Planned | Tuần 1 - Thiết lập nền tảng & Auth | Tài liệu secrets & backup | Hoàn thiện tài liệu secrets rotation, backup, hướng dẫn khôi phục DB. | 17/10/2025 | 17/10/2025 | 6 | Tuấn Anh | 0% |
-| Planned | Tuần 1 - Thiết lập nền tảng & Auth | Buffer & harden auth | Buffer xử lý bug auth, bổ sung guard chống brute-force, rà soát log. | 18/10/2025 | 18/10/2025 | 4 | Khang | 0% |
-| Planned | Tuần 1 - Thiết lập nền tảng & Auth | Checklist QA auth | Rà soát migration/seed, viết checklist QA cho auth và cập nhật hướng dẫn. | 18/10/2025 | 18/10/2025 | 4 | Tuấn Anh | 0% |
-| Planned | Tuần 1 - Thiết lập nền tảng & Auth | Nghiên cứu OAuth 2.0 | Nghiên cứu tùy chọn OAuth 2.0 cho tương lai, ghi chú lại kết quả. | 19/10/2025 | 19/10/2025 | 3 | Khang | 0% |
-| Planned | Tuần 1 - Thiết lập nền tảng & Auth | Tổng kết tài liệu tuần | Tổng hợp tài liệu tuần, hoàn thiện sơ đồ DB ở mục 6 và báo cáo tiến độ. | 19/10/2025 | 19/10/2025 | 3 | Tuấn Anh | 0% |
-
-#### Tuần 2 – Course & Enrollment API
-
-| TRẠNG THÁI | MỤC TIÊU LỚN | MỤC TIÊU NHỎ | MÔ TẢ | BẮT ĐẦU | KẾT THÚC | ƯỚC LƯỢNG (h) | NGƯỜI THỰC HIỆN | TIẾN ĐỘ |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Planned | Tuần 2 - Course & Enrollment | GET /courses filter & pagination | Implement `GET /api/v1/courses` với filter, pagination, search params. | 20/10/2025 | 20/10/2025 | 6 | Khang | 0% |
-| Planned | Tuần 2 - Course & Enrollment | POST /enrollments | Xây dựng `POST /api/v1/enrollments`, validate chỗ ngồi và trạng thái đăng ký. | 20/10/2025 | 20/10/2025 | 6 | Tuấn Anh | 0% |
-| Planned | Tuần 2 - Course & Enrollment | POST /courses (draft) | Tạo `POST /api/v1/courses` (draft, ownership, slug) và unit test services. | 21/10/2025 | 21/10/2025 | 6 | Khang | 0% |
-| Planned | Tuần 2 - Course & Enrollment | DELETE /enrollments | Xây dựng `DELETE /api/v1/enrollments/{course_id}` và ghi log background. | 21/10/2025 | 21/10/2025 | 6 | Tuấn Anh | 0% |
-| Planned | Tuần 2 - Course & Enrollment | PUT /courses publish/unpublish | Hoàn thiện `PUT /api/v1/courses/{id}` với metadata và trạng thái publish/unpublish. | 22/10/2025 | 22/10/2025 | 6 | Khang | 0% |
-| Planned | Tuần 2 - Course & Enrollment | GET /classes/{id} | Xây dựng `GET /api/v1/classes/{class_id}` với phân trang và phân quyền role. | 22/10/2025 | 22/10/2025 | 6 | Tuấn Anh | 0% |
-| Planned | Tuần 2 - Course & Enrollment | GET /courses/{id} & metadata | Hoàn thiện `GET /api/v1/courses/{id}` trả syllabus, files, quyền truy cập. | 23/10/2025 | 23/10/2025 | 6 | Khang | 0% |
-| Planned | Tuần 2 - Course & Enrollment | POST /classes | Tạo `POST /api/v1/classes`, cấu hình link mời và stub email queue. | 23/10/2025 | 23/10/2025 | 6 | Tuấn Anh | 0% |
-| Planned | Tuần 2 - Course & Enrollment | Search nâng cao /courses | Bổ sung filter category/level, search text cho `/courses`. | 24/10/2025 | 24/10/2025 | 6 | Khang | 0% |
-| Planned | Tuần 2 - Course & Enrollment | POST /classes/{id}/students | Triển khai invite & accept cho `POST /api/v1/classes/{id}/students`. | 24/10/2025 | 24/10/2025 | 6 | Tuấn Anh | 0% |
-| Planned | Tuần 2 - Course & Enrollment | Refactor service layer | Refactor services, bổ sung repository unit test, dọn dẹp mã. | 25/10/2025 | 25/10/2025 | 4 | Khang | 0% |
-| Planned | Tuần 2 - Course & Enrollment | Chuẩn bị schema quiz/progress | Chuẩn hóa schema quiz/progress, thiết lập foreign keys lỏng. | 25/10/2025 | 25/10/2025 | 4 | Tuấn Anh | 0% |
-| Planned | Tuần 2 - Course & Enrollment | Nghỉ & tổng kết sprint | Nghỉ, rà soát backlog, cập nhật ghi chú sprint. | 26/10/2025 | 26/10/2025 | 0 | Khang | 0% |
-| Planned | Tuần 2 - Course & Enrollment | Nghỉ & tổng kết sprint | Nghỉ, rà soát backlog, cập nhật ghi chú sprint. | 26/10/2025 | 26/10/2025 | 0 | Tuấn Anh | 0% |
-
-#### Tuần 3 – Quiz, Progress & AI Baseline
-
-| TRẠNG THÁI | MỤC TIÊU LỚN | MỤC TIÊU NHỎ | MÔ TẢ | BẮT ĐẦU | KẾT THÚC | ƯỚC LƯỢNG (h) | NGƯỜI THỰC HIỆN | TIẾN ĐỘ |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Planned | Tuần 3 - Quiz & AI Baseline | Service upload & kiểm tra file | Xây dựng service upload, scan virus, ký URL tạm thời và validate kích thước. | 27/10/2025 | 27/10/2025 | 6 | Khang | 0% |
-| Planned | Tuần 3 - Quiz & AI Baseline | CRUD quiz cơ bản | Triển khai `POST/GET /api/v1/quizzes` với logic CRUD cơ bản. | 27/10/2025 | 27/10/2025 | 6 | Tuấn Anh | 0% |
-| Planned | Tuần 3 - Quiz & AI Baseline | RBAC uploads | Hoàn thiện `GET/DELETE /api/v1/uploads/{id}` với RBAC. | 28/10/2025 | 28/10/2025 | 6 | Khang | 0% |
-| Planned | Tuần 3 - Quiz & AI Baseline | Submit quiz & auto-grade | Xây dựng `POST /api/v1/quizzes/{id}/submit` + auto-grade logic. | 28/10/2025 | 28/10/2025 | 6 | Tuấn Anh | 0% |
-| Planned | Tuần 3 - Quiz & AI Baseline | Worker xử lý upload | Viết worker xử lý `POST /api/v1/uploads/{id}/process`, queue vector hóa. | 29/10/2025 | 29/10/2025 | 6 | Khang | 0% |
-| Planned | Tuần 3 - Quiz & AI Baseline | Lịch sử quiz & dashboard | Hoàn thiện `GET /api/v1/quizzes/history`, map kết quả cho dashboard. | 29/10/2025 | 29/10/2025 | 6 | Tuấn Anh | 0% |
-| Planned | Tuần 3 - Quiz & AI Baseline | Proxy AI chat | Triển khai `POST /api/v1/ai/chat` proxy GenAI, guardrail baseline. | 30/10/2025 | 30/10/2025 | 6 | Khang | 0% |
-| Planned | Tuần 3 - Quiz & AI Baseline | Progress API | Xây dựng `GET /api/v1/progress/my` & `POST /api/v1/progress` cập nhật tiến độ. | 30/10/2025 | 30/10/2025 | 6 | Tuấn Anh | 0% |
-| Planned | Tuần 3 - Quiz & AI Baseline | Logging & retry AI | Thiết lập rate limit, logging ẩn danh, retry policy cho AI. | 31/10/2025 | 31/10/2025 | 6 | Khang | 0% |
-| Planned | Tuần 3 - Quiz & AI Baseline | Kết nối quiz với progress | Gắn kết quả quiz vào progress, phát thông báo. | 31/10/2025 | 31/10/2025 | 6 | Tuấn Anh | 0% |
-| Planned | Tuần 3 - Quiz & AI Baseline | Buffer upload | Buffer tối ưu storage adapter, cập nhật tài liệu uploads. | 01/11/2025 | 01/11/2025 | 4 | Khang | 0% |
-| Planned | Tuần 3 - Quiz & AI Baseline | Buffer quiz/progress docs | Buffer, cập nhật doc module quiz/progress. | 01/11/2025 | 01/11/2025 | 4 | Tuấn Anh | 0% |
-| Planned | Tuần 3 - Quiz & AI Baseline | Review sprint | Nghỉ, review sprint, cập nhật bảng kiểm tra. | 02/11/2025 | 02/11/2025 | 0 | Khang | 0% |
-| Planned | Tuần 3 - Quiz & AI Baseline | Review sprint | Nghỉ, review sprint, cập nhật bảng kiểm tra. | 02/11/2025 | 02/11/2025 | 0 | Tuấn Anh | 0% |
-
-#### Tuần 4 – Analytics, Admin & Hardening
-
-| TRẠNG THÁI | MỤC TIÊU LỚN | MỤC TIÊU NHỎ | MÔ TẢ | BẮT ĐẦU | KẾT THÚC | ƯỚC LƯỢNG (h) | NGƯỜI THỰC HIỆN | TIẾN ĐỘ |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Planned | Tuần 4 - Analytics & Hardening | Middleware bảo mật nâng cao | Triển khai HTTP headers, CSP, rate limit nâng cao cho backend. | 03/11/2025 | 03/11/2025 | 6 | Khang | 0% |
-| Planned | Tuần 4 - Analytics & Hardening | Analytics student dashboard | Implement `GET /api/v1/analytics/student/dashboard` + filter thời gian. | 03/11/2025 | 03/11/2025 | 6 | Tuấn Anh | 0% |
-| Planned | Tuần 4 - Analytics & Hardening | Pen-test auth/upload | Pen-test nội bộ auth/upload, xử lý findings OWASP. | 04/11/2025 | 04/11/2025 | 6 | Khang | 0% |
-| Planned | Tuần 4 - Analytics & Hardening | Analytics instructor overview | Triển khai `GET /api/v1/analytics/instructor/overview` & `/courses`. | 04/11/2025 | 04/11/2025 | 6 | Tuấn Anh | 0% |
-| Planned | Tuần 4 - Analytics & Hardening | Docker packaging | Đóng gói Dockerfile + docker-compose (API, Mongo, Redis, worker). | 05/11/2025 | 05/11/2025 | 6 | Khang | 0% |
-| Planned | Tuần 4 - Analytics & Hardening | Analytics admin system | Xây dựng `GET /api/v1/analytics/admin/system` + thống kê người dùng. | 05/11/2025 | 05/11/2025 | 6 | Tuấn Anh | 0% |
-| Planned | Tuần 4 - Analytics & Hardening | Thiết lập CI/CD | Thiết lập pipeline lint, pytest, staging deploy, pre-commit. | 06/11/2025 | 06/11/2025 | 6 | Khang | 0% |
-| Planned | Tuần 4 - Analytics & Hardening | Seed analytics fixtures | Viết script seed demo analytics + fixtures NDJSON. | 06/11/2025 | 06/11/2025 | 6 | Tuấn Anh | 0% |
-| Planned | Tuần 4 - Analytics & Hardening | E2E backend-only test | Kiểm thử Postman collection full + smoke AI backend. | 07/11/2025 | 07/11/2025 | 6 | Khang | 0% |
-| Planned | Tuần 4 - Analytics & Hardening | Báo cáo UAT backend | Tổng hợp báo cáo UAT backend, regression analytics. | 07/11/2025 | 07/11/2025 | 6 | Tuấn Anh | 0% |
-| Planned | Tuần 4 - Analytics & Hardening | Buffer hardening | Buffer sửa lỗi bảo mật, cập nhật tài liệu hardening. | 08/11/2025 | 08/11/2025 | 4 | Khang | 0% |
-| Planned | Tuần 4 - Analytics & Hardening | Buffer analytics | Buffer sửa lỗi thống kê, tối ưu aggregation. | 08/11/2025 | 08/11/2025 | 4 | Tuấn Anh | 0% |
-| Planned | Tuần 4 - Analytics & Hardening | Tổng kết sprint | Nghỉ, tổng kết sprint, cập nhật backlog tuần 5. | 09/11/2025 | 09/11/2025 | 0 | Khang | 0% |
-| Planned | Tuần 4 - Analytics & Hardening | Tổng kết sprint | Nghỉ, tổng kết sprint, cập nhật backlog tuần 5. | 09/11/2025 | 09/11/2025 | 0 | Tuấn Anh | 0% |
-
-#### Tuần 5 – Stabilize & Release
-
-| TRẠNG THÁI | MỤC TIÊU LỚN | MỤC TIÊU NHỎ | MÔ TẢ | BẮT ĐẦU | KẾT THÚC | ƯỚC LƯỢNG (h) | NGƯỜI THỰC HIỆN | TIẾN ĐỘ |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Planned | Tuần 5 - Stabilize & Release | Checklist bảo mật cuối | Rà soát secret rotation, chuẩn bị bàn giao và checklist bảo mật. | 10/11/2025 | 10/11/2025 | 6 | Khang | 0% |
-| Planned | Tuần 5 - Stabilize & Release | Rà soát tài liệu API | Soát xét tài liệu API, cập nhật README và `HE_THONG.md`. | 10/11/2025 | 10/11/2025 | 6 | Tuấn Anh | 0% |
-| Planned | Tuần 5 - Stabilize & Release | Hỗ trợ QA & changelog | Hỗ trợ QA, fix bug P0/P1, cập nhật changelog backend. | 11/11/2025 | 11/11/2025 | 6 | Khang | 0% |
-| Planned | Tuần 5 - Stabilize & Release | Hoàn thiện test report | Hoàn thiện test report, finalise Postman collection. | 11/11/2025 | 11/11/2025 | 6 | Tuấn Anh | 0% |
-| Planned | Tuần 5 - Stabilize & Release | Release candidate & tag | Freeze code, tạo release candidate, ký tag Git, chuẩn bị artifacts. | 12/11/2025 | 12/11/2025 | 6 | Khang | 0% |
-| Planned | Tuần 5 - Stabilize & Release | Script deploy + rollback | Chuẩn bị script deploy production, rollback, document quy trình. | 12/11/2025 | 12/11/2025 | 6 | Tuấn Anh | 0% |
-| Planned | Tuần 5 - Stabilize & Release | Deploy & postmortem | Deploy production (nếu pass UAT), viết postmortem, bàn giao bảo trì. | 13/11/2025 | 13/11/2025 | 6 | Khang | 0% |
-| Planned | Tuần 5 - Stabilize & Release | Giám sát & tổng kết | Giám sát logs, tổng hợp báo cáo cuối kỳ, archive bộ test. | 13/11/2025 | 13/11/2025 | 6 | Tuấn Anh | 0% |
-
-### 14.3 Hoạt động bổ trợ
-- **Daily standup**: cập nhật tiến độ, block, kế hoạch.
-- **Code review**: mỗi merge request bắt buộc người còn lại review.
-- **Local runbook & seed data**: duy trì `docker-compose`, script seed JSON/NDJSON, đảm bảo ai cũng chạy được API và database cục bộ.
-- **API test automation**: cập nhật Postman/Newman collection, pytest suites; log kết quả test vào báo cáo tuần.
-- **QA phối hợp**: dành ít nhất 1h/ngày tương tác với QA để đồng bộ test case backend.
-- **Retrospective**: cuối mỗi tuần đánh giá điều chỉnh timeline.
-
----
-
-## 15. ĐỊNH DẠNG DỮ LIỆU KHÓA HỌC MẪU CHO DATABASE
-
-### 15.1 Khuyến nghị tổng quan
-- **Ưu tiên JSON/NDJSON**: MongoDB làm việc tốt với document JSON. Dùng định dạng **NDJSON** (mỗi dòng một object) để import bằng `mongoimport` nhanh chóng và hỗ trợ version control.
-- **Tách nhỏ theo module**: lưu từng nhóm dữ liệu vào file riêng trong thư mục `seed/` (`courses.ndjson`, `chapters.ndjson`, `quizzes.ndjson`, ...).
-- **Giữ metadata đầy đủ**: bao gồm `course_id`, `slug`, `visibility`, `modules`, `resources`, `vector_status` để phục vụ AI pipeline và analytics.
-- **Version & timestamps**: thêm trường `content_version`, `created_at`, `updated_at` để đồng bộ với các script migrate.
-
-### 15.2 Cấu trúc mẫu `courses.ndjson`
-```json
-{"_id": {"$oid": "6528b1f9a5c6c01d5f1a0001"},
- "slug": "python-foundations",
- "title": "Python Foundations",
- "description": "Khóa học Python cơ bản dành cho người mới bắt đầu",
- "level": "beginner",
- "category": "programming",
- "visibility": "public",
- "owner_id": {"$oid": "6528b1f9a5c6c01d5f1a1000"},
- "content_version": 1,
- "modules": [
-   {"module_id": "intro", "title": "Giới thiệu", "summary": "Tổng quan Python", "lessons": [
-     {"lesson_id": "history", "title": "Lịch sử Python", "duration": 10},
-     {"lesson_id": "setup", "title": "Cài đặt môi trường", "duration": 15}
-   ]},
-   {"module_id": "data-types", "title": "Kiểu dữ liệu", "lessons": [
-     {"lesson_id": "numbers", "title": "Số và toán tử", "duration": 20},
-     {"lesson_id": "strings", "title": "Chuỗi", "duration": 25}
-   ]}
- ],
- "resources": [
-   {"type": "pdf", "title": "Cheat Sheet", "url": "s3://learning-ai/courses/python/cheatsheet.pdf"},
-   {"type": "quiz", "quiz_id": "python-intro-quiz"}
- ],
- "tags": ["python", "beginner"],
- "vector_status": "not_indexed",
- "created_at": {"$date": "2025-10-01T00:00:00Z"},
- "updated_at": {"$date": "2025-10-01T00:00:00Z"}}
-```
-
-### 15.3 Nội dung chi tiết bài học
-- **Markdown cho lesson**: lưu nội dung dài của từng bài học trong file Markdown dưới `seed/lessons/<course_slug>/<lesson_id>.md` để dễ chỉnh sửa, đồng thời import vào Mongo qua script (Field `content_markdown`).
-- **Tài liệu bổ sung**: nếu cần lưu file gốc (Word/PDF), đặt trong `seed/resources/` và lưu đường dẫn tới storage trong JSON.
-- **Mapping**: script seed đọc JSON chính, sau đó attach nội dung Markdown/tài liệu vào trường `content_html` hoặc `content_markdown` tương ứng trước khi ghi vào DB.
 
 ### 15.4 Công cụ hỗ trợ
 - Dùng `scripts/init_database.py` để đọc toàn bộ file NDJSON/Markdown và insert dữ liệu.

@@ -9,6 +9,7 @@ from controllers.auth_controller import (
     handle_logout,
     handle_refresh,
     handle_register,
+    handle_resend_verification,
     handle_reset_password,
     handle_update_password,
     handle_update_profile,
@@ -70,16 +71,16 @@ async def logout_route(payload: RefreshRequest, request: Request, response: Resp
     response.delete_cookie("refresh_token", path="/api/v1/auth")
 
 
-@router.get("/me", response_model=MessageResponse, summary="Thông tin người dùng hiện tại")
-async def me_route(current_user: dict = Depends(get_current_user)) -> MessageResponse:
-    """Trả thông tin user (placeholder)."""
+@router.get("/me", summary="Thông tin người dùng hiện tại")
+async def me_route(current_user: dict = Depends(get_current_user)) -> dict:
+    """Trả thông tin user."""
 
     return await handle_get_profile(current_user)
 
 
-@router.patch("/me", response_model=MessageResponse, summary="Cập nhật hồ sơ")
-async def update_profile_route(payload: dict, current_user: dict = Depends(get_current_user)) -> MessageResponse:
-    """Cập nhật hồ sơ user (placeholder)."""
+@router.patch("/me", summary="Cập nhật hồ sơ")
+async def update_profile_route(payload: dict, current_user: dict = Depends(get_current_user)) -> dict:
+    """Cập nhật hồ sơ user."""
 
     return await handle_update_profile(payload, current_user)
 
@@ -105,8 +106,16 @@ async def reset_password_route(payload: dict) -> MessageResponse:
     return await handle_reset_password(payload)
 
 
-@router.post("/verify-email", response_model=MessageResponse, summary="Xác thực email")
-async def verify_email_route(payload: dict) -> MessageResponse:
-    """Xác thực email (placeholder)."""
-
+@router.post("/verify-email", response_model=UserResponse, summary="Xác thực email")
+async def verify_email_route(payload: dict) -> UserResponse:
+    """Xác thực email bằng token."""
+    
     return await handle_verify_email(payload)
+
+
+@router.post("/resend-verification", response_model=MessageResponse, summary="Gửi lại email xác thực")
+async def resend_verification_route(current_user: dict = Depends(get_current_user)) -> MessageResponse:
+    """Gửi lại email xác thực cho user hiện tại."""
+    
+    user_id = current_user.get("sub")
+    return await handle_resend_verification(user_id)

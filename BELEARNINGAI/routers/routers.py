@@ -19,6 +19,7 @@ from .recommendation_router import router as recommendation_router
 from .search_router import router as search_router
 from .upload_router import router as upload_router
 from .users_router import router as users_router
+from .health_router import router as health_router  # NEW
 
 api_router = APIRouter()
 
@@ -40,3 +41,4 @@ api_router.include_router(assessments_router, prefix="/assessments")
 api_router.include_router(admin_router, prefix="/admin")
 api_router.include_router(search_router, prefix="/search")
 api_router.include_router(recommendation_router, prefix="/recommendations")
+api_router.include_router(health_router, prefix="/health")  # NEW

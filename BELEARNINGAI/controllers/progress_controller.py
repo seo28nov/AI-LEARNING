@@ -1,7 +1,6 @@
 """Controller tiến độ học tập."""
 from models.models import ProgressResponse
 from schemas.enrollment import ProgressSnapshot
-from services.enrollment_service import update_progress_demo
 from services.progress_service import get_progress, update_progress
 
 
@@ -19,5 +18,14 @@ async def handle_update_progress(user_id: str, course_id: str, progress: float) 
 
 async def get_course_progress(user_id: str, course_id: str) -> ProgressSnapshot:
     """Tổng hợp tiến độ dùng cho dashboard analytics."""
-
-    return await update_progress_demo(user_id, course_id)
+    # Sử dụng get_progress thay vì update_progress_demo
+    progress_data = await get_progress(user_id, course_id)
+    
+    # Convert sang ProgressSnapshot format
+    return ProgressSnapshot(
+        user_id=user_id,
+        course_id=course_id,
+        progress=progress_data.get("progress", 0.0),
+        completed_chapters=progress_data.get("completed_chapters", []),
+        last_accessed=progress_data.get("last_accessed")
+    )

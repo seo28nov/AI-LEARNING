@@ -6,16 +6,20 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 from config.config import get_settings
 from models.models import (
-    ChatSessionDocument,
+    AssessmentDocument,
+    ChatDocument,
+    ClassDocument,
     CourseDocument,
     DashboardDocument,
     EnrollmentDocument,
-    FileUploadDocument,
     NotificationDocument,
-    RefreshTokenDocument,
+    PasswordResetTokenDocument,
     ProgressDocument,
     QuizDocument,
+    RefreshTokenDocument,
+    UploadDocument,
     UserDocument,
+    VerificationTokenDocument,
 )
 
 _settings = get_settings()
@@ -33,14 +37,18 @@ async def init_database() -> None:
         document_models=[
             UserDocument,
             CourseDocument,
+            ClassDocument,
             EnrollmentDocument,
             QuizDocument,
-            ChatSessionDocument,
-            FileUploadDocument,
+            AssessmentDocument,
+            ChatDocument,
+            UploadDocument,
             ProgressDocument,
             NotificationDocument,
             DashboardDocument,
             RefreshTokenDocument,
+            VerificationTokenDocument,
+            PasswordResetTokenDocument,
         ],
     )
 

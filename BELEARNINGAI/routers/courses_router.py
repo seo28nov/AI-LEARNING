@@ -19,6 +19,9 @@ from controllers.course_controller import (
     handle_update_chapter,
     handle_update_visibility,
     handle_course_categories,
+    handle_index_course,
+    handle_reindex_course,
+    handle_index_all_courses,
 )
 from middleware.auth import get_current_user
 from models.models import CourseCreate, CourseResponse
@@ -127,3 +130,54 @@ async def update_chapter_route(course_id: str, chapter_id: str, payload: dict) -
 )
 async def delete_chapter_route(course_id: str, chapter_id: str) -> MessageResponse:
     return await handle_delete_chapter(course_id, chapter_id)
+
+
+# ============================================================================
+# RAG INDEXING ENDPOINTS
+# ============================================================================
+
+@router.post(
+    "/{course_id}/index",
+    response_model=dict,
+    summary="Index khóa học vào ChromaDB",
+    description="Index nội dung khóa học để sử dụng cho RAG AI chat. Chỉ instructor của khóa học hoặc admin mới có quyền."
+)
+async def index_course_route(
+    course_id: str,
+    current_user: dict = Depends(get_current_user)
+) -> dict:
+    """Endpoint index course vào vector database."""
+    user_id = current_user.get("user_id")
+    user_role = current_user.get("role")
+    return await handle_index_course(course_id, user_id, user_role)
+
+
+@router.post(
+    "/{course_id}/reindex",
+    response_model=dict,
+    summary="Reindex khóa học",
+    description="Xóa embeddings cũ và index lại. Dùng khi course content thay đổi."
+)
+async def reindex_course_route(
+    course_id: str,
+    current_user: dict = Depends(get_current_user)
+) -> dict:
+    """Endpoint reindex course."""
+    user_id = current_user.get("user_id")
+    user_role = current_user.get("role")
+    return await handle_reindex_course(course_id, user_id, user_role)
+
+
+@router.post(
+    "/admin/index-all",
+    response_model=dict,
+    summary="Index tất cả khóa học (Admin only)",
+    description="Index tất cả courses vào ChromaDB. Chỉ admin mới có quyền."
+)
+async def index_all_courses_route(
+    current_user: dict = Depends(get_current_user)
+) -> dict:
+    """Endpoint index tất cả courses (admin only)."""
+    user_role = current_user.get("role")
+    return await handle_index_all_courses(user_role)
+
