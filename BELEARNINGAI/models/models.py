@@ -40,12 +40,17 @@ class CourseDocument(Document, CourseBase):
     created_by: str = Field(..., description="ID người tạo khóa học")
     source_type: str = Field(default="ai_generated", description="Nguồn gốc: manual/ai_generated/from_upload")
     modules: List[ModuleOutline] = Field(default_factory=list, description="Danh sách chương")
+    
+    # Additional fields for course management
+    language: str = Field(default="vi", description="Ngôn ngữ khóa học: vi/en")
+    is_published: bool = Field(default=False, description="Khóa học đã công khai hay chưa")
+    
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Settings:
         name = "courses"
-        indexes = ["title", "category", "tags"]
+        indexes = ["title", "category", "tags", "is_published"]
 
 
 class CourseCreate(CourseBase):
@@ -216,6 +221,13 @@ class EnrollmentDocument(Document):
     status: EnrollmentStatus = Field(default=EnrollmentStatus.pending)
     progress: float = Field(default=0.0, ge=0.0, le=100.0)
     enrolled_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    # Tracking fields
+    completed_chapters: List[str] = Field(default_factory=list, description="List chapter IDs đã hoàn thành")
+    quiz_scores: dict = Field(default_factory=dict, description="Quiz scores: {quiz_id: score}")
+    total_study_time: int = Field(default=0, description="Tổng thời gian học (phút)")
+    last_accessed: Optional[datetime] = Field(default=None, description="Lần truy cập cuối")
+    completed_at: Optional[datetime] = Field(default=None, description="Thời điểm hoàn thành khóa học")
 
     class Settings:
         name = "enrollments"
@@ -241,21 +253,26 @@ class QuizQuestion(BaseModel):
 
     question: str
     options: List[str]
-    correct_answer: Optional[str] = None
+    correct_answer: Optional[int] = Field(default=None, description="Index của đáp án đúng (0-based)")
+    explanation: Optional[str] = Field(default=None, description="Giải thích đáp án")
 
 
 class QuizDocument(Document):
     """Document lưu quiz theo khóa học."""
 
     course_id: str = Field(...)
+    chapter_id: Optional[str] = Field(default=None, description="Chapter ID nếu quiz thuộc chapter cụ thể")
     title: str = Field(...)
+    description: str = Field(default="", description="Mô tả quiz")
     questions: List[QuizQuestion] = Field(default_factory=list)
+    time_limit: Optional[int] = Field(default=None, description="Thời gian làm bài (phút)")
+    passing_score: float = Field(default=70.0, description="Điểm đạt tối thiểu (%)")
     created_by: str = Field(...)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Settings:
         name = "quizzes"
-        indexes = ["course_id"]
+        indexes = ["course_id", "chapter_id"]
 
 
 class QuizResponse(BaseModel):
@@ -278,18 +295,19 @@ class ChatMessage(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 
-class ChatSessionDocument(Document):
+class ChatDocument(Document):
     """Document lưu lịch sử chat AI."""
 
-    course_id: Optional[str] = None
     user_id: str = Field(...)
-    mode: str = Field(default="hybrid")
+    course_id: Optional[str] = None
+    title: str = Field(default="New Chat")
     messages: List[ChatMessage] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Settings:
-        name = "chat_sessions"
-        indexes = ["user_id"]
+        name = "chats"
+        indexes = ["user_id", "course_id"]
 
 
 class ChatResponse(BaseModel):
@@ -299,18 +317,26 @@ class ChatResponse(BaseModel):
     answer: str
 
 
-class FileUploadDocument(Document):
+class UploadDocument(Document):
     """Document lưu thông tin file upload."""
 
     user_id: str = Field(...)
-    filename: str = Field(...)
-    content_type: str = Field(...)
-    status: str = Field(default="processing")
+    course_id: Optional[str] = None
+    file_name: str = Field(...)
+    file_type: str = Field(...)
+    file_size: int = Field(default=0)
+    file_hash: str = Field(...)
+    file_url: str = Field(...)
+    storage_path: str = Field(...)
+    description: str = Field(default="")
+    status: str = Field(default="pending")  # pending, processing, completed, failed
+    extracted_text: str = Field(default="")
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Settings:
         name = "uploads"
-        indexes = ["user_id", "status"]
+        indexes = ["user_id", "status", "file_hash"]
 
 
 class UploadResponse(BaseModel):
@@ -412,6 +438,43 @@ class RefreshTokenDocument(Document):
         ]
 
 
+class VerificationTokenDocument(Document):
+    """Document lưu token xác thực email."""
+
+    user_id: str = Field(..., description="ID người dùng")
+    token: str = Field(..., description="Token xác thực")
+    token_type: str = Field(default="email_verification", description="Loại token")
+    expires_at: datetime = Field(..., description="Thời gian hết hạn")
+    used_at: Optional[datetime] = Field(default=None, description="Thời điểm đã sử dụng")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Settings:
+        name = "verification_tokens"
+        indexes = [
+            ("token",),
+            ("user_id", "token_type"),
+            ("expires_at",),
+        ]
+
+
+class PasswordResetTokenDocument(Document):
+    """Document lưu token reset mật khẩu."""
+
+    user_id: str = Field(..., description="ID người dùng")
+    token: str = Field(..., description="Token reset")
+    expires_at: datetime = Field(..., description="Thời gian hết hạn")
+    used_at: Optional[datetime] = Field(default=None, description="Thời điểm đã sử dụng")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Settings:
+        name = "password_reset_tokens"
+        indexes = [
+            ("token",),
+            ("user_id",),
+            ("expires_at",),
+        ]
+
+
 class DashboardMetric(BaseModel):
     """Chỉ số dashboard cơ bản."""
 
@@ -435,3 +498,162 @@ class DashboardResponse(BaseModel):
 
     metrics: List[DashboardMetric]
     generated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+# ============================================================================
+# CLASS MANAGEMENT - Lớp học của Instructor (Theo SYSTEM.md mục 6.3.1)
+# ============================================================================
+
+
+class ClassDocument(Document):
+    """Document lưu thông tin lớp học do Instructor tạo."""
+
+    name: str = Field(..., description="Tên lớp học")
+    description: str = Field(default="", description="Mô tả lớp học")
+    instructor_id: str = Field(..., description="ID giảng viên tạo lớp")
+    course_id: str = Field(..., description="ID khóa học gốc được sử dụng")
+
+    # Thông tin lớp học
+    class_code: str = Field(..., description="Mã lớp để học viên tham gia")
+    max_students: Optional[int] = Field(default=None, description="Số học viên tối đa (None = không giới hạn)")
+    current_students: int = Field(default=0, description="Số học viên hiện tại")
+    student_ids: List[str] = Field(default_factory=list, description="Danh sách ID học viên")
+
+    # Thời gian và lịch trình
+    start_date: Optional[datetime] = Field(default=None, description="Ngày bắt đầu lớp")
+    end_date: Optional[datetime] = Field(default=None, description="Ngày kết thúc lớp")
+
+    # Cài đặt và quy định
+    auto_enroll: bool = Field(default=False, description="Tự động duyệt đăng ký")
+    allow_late_join: bool = Field(default=True, description="Cho phép tham gia muộn")
+    discussion_enabled: bool = Field(default=True, description="Bật thảo luận")
+    ai_tutor_enabled: bool = Field(default=True, description="Bật AI tutor cho lớp")
+
+    status: str = Field(
+        default="upcoming", description="Trạng thái: upcoming/active/completed/cancelled"
+    )
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Settings:
+        name = "classes"
+        indexes = [
+            ("instructor_id", "status"),
+            ("class_code",),
+            ("student_ids",),
+        ]
+
+
+class ClassResponse(BaseModel):
+    """Schema trả về thông tin lớp học."""
+
+    id: str = Field(..., alias="_id")
+    name: str
+    description: str
+    instructor_id: str
+    course_id: str
+    class_code: str
+    max_students: Optional[int] = None
+    current_students: int
+    student_ids: List[str]
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        populate_by_name = True
+
+
+# ============================================================================
+# ASSESSMENT SYSTEM - Đánh giá năng lực (Theo SYSTEM.md mục 6.2.2)
+# ============================================================================
+
+
+class AssessmentQuestion(BaseModel):
+    """Câu hỏi trong bài đánh giá năng lực."""
+
+    question_id: str = Field(...)
+    question_text: str = Field(...)
+    question_type: str = Field(default="multiple_choice", description="multiple_choice/true_false/fill_blank")
+    options: List[str] = Field(default_factory=list, description="Các lựa chọn (cho trắc nghiệm)")
+    correct_answer: Optional[int] = Field(default=None, description="Index đáp án đúng")
+    user_answer: Optional[int] = Field(default=None, description="Câu trả lời của người dùng")
+    is_correct: Optional[bool] = Field(default=None, description="Đúng hay sai")
+    difficulty: str = Field(default="medium", description="easy/medium/hard")
+    time_spent_seconds: int = Field(default=0, description="Thời gian làm câu hỏi (giây)")
+
+
+class TopicAnalysis(BaseModel):
+    """Phân tích kết quả theo từng chủ đề."""
+
+    topic: str = Field(..., description="Tên chủ đề cụ thể")
+    questions_count: int = Field(default=0)
+    correct_count: int = Field(default=0)
+    mastery_level: str = Field(default="fair", description="poor/fair/good/excellent")
+
+
+class AssessmentResult(BaseModel):
+    """Kết quả đánh giá năng lực."""
+
+    total_questions: int = Field(default=0)
+    correct_answers: int = Field(default=0)
+    score: float = Field(default=0.0, description="Điểm số 0-100")
+    percentage: float = Field(default=0.0)
+    level: str = Field(default="beginner", description="beginner/intermediate/advanced")
+    strengths: List[str] = Field(default_factory=list)
+    weaknesses: List[str] = Field(default_factory=list)
+    recommendations: List[str] = Field(default_factory=list, description="ID các khóa học gợi ý")
+    time_taken_minutes: int = Field(default=0)
+
+
+class AssessmentDocument(Document):
+    """Document lưu bài đánh giá năng lực đầu vào."""
+
+    user_id: str = Field(..., description="ID người thực hiện đánh giá")
+    assessment_type: str = Field(
+        default="skill_assessment", description="skill_assessment/placement_test/quiz"
+    )
+    category: str = Field(..., description="programming/design/business/marketing")
+
+    # Danh sách câu hỏi và câu trả lời
+    questions: List[AssessmentQuestion] = Field(default_factory=list)
+
+    # Kết quả đánh giá
+    result: AssessmentResult = Field(default_factory=AssessmentResult)
+
+    # Phân tích chi tiết theo chủ đề
+    topic_analysis: List[TopicAnalysis] = Field(default_factory=list)
+
+    completed_at: Optional[datetime] = Field(default=None)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Settings:
+        name = "assessments"
+        indexes = [
+            ("user_id", "assessment_type"),
+            ("category",),
+            ("completed_at",),
+        ]
+
+
+class AssessmentResponse(BaseModel):
+    """Schema trả về kết quả đánh giá."""
+
+    id: str = Field(..., alias="_id")
+    user_id: str
+    assessment_type: str
+    category: str
+    result: AssessmentResult
+    topic_analysis: List[TopicAnalysis]
+    completed_at: Optional[datetime] = None
+    created_at: datetime
+
+    class Config:
+        populate_by_name = True
+
+
+# Aliases for backward compatibility with course_indexing_service
+CourseChapter = ModuleOutline
+Lesson = LessonContent

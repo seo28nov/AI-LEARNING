@@ -8,12 +8,22 @@ from jose import JWTError
 from config.config import get_settings
 from models.models import (
     LoginRequest,
+    PasswordResetTokenDocument,
     RefreshRequest,
     RefreshTokenDocument,
     RegisterRequest,
     TokenResponse,
     UserDocument,
     UserResponse,
+    VerificationTokenDocument,
+)
+from utils.email import (
+    generate_reset_token,
+    generate_verification_token,
+    get_token_expiry,
+    send_reset_password_email,
+    send_verification_email,
+    send_welcome_email,
 )
 from utils.security import (
     build_fingerprint,
@@ -213,3 +223,172 @@ async def logout(payload: RefreshRequest, http_request: Request) -> None:
 
     stored.revoked_at = datetime.now(timezone.utc)
     await stored.save()
+
+
+async def request_email_verification(user_id: str) -> str:
+    """Tạo và gửi email xác thực cho người dùng.
+    
+    Args:
+        user_id: ID người dùng cần xác thực
+        
+    Returns:
+        Token xác thực (để testing)
+    """
+    user = await UserDocument.get(user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Người dùng không tồn tại")
+    
+    if user.status == "active":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email đã được xác thực")
+    
+    # Tạo token mới
+    token = generate_verification_token()
+    expires_at = get_token_expiry(hours=24)
+    
+    # Lưu token vào database
+    verification_token = VerificationTokenDocument(
+        user_id=str(user.id),
+        token=token,
+        token_type="email_verification",
+        expires_at=expires_at,
+    )
+    await verification_token.insert()
+    
+    # Gửi email
+    await send_verification_email(user.email, token, user.full_name)
+    
+    return token
+
+
+async def verify_email(token: str) -> UserResponse:
+    """Xác thực email bằng token.
+    
+    Args:
+        token: Token xác thực
+        
+    Returns:
+        Thông tin người dùng sau khi xác thực
+    """
+    # Tìm token trong database
+    verification = await VerificationTokenDocument.find_one(
+        VerificationTokenDocument.token == token,
+        VerificationTokenDocument.token_type == "email_verification",
+    )
+    
+    if verification is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token không hợp lệ")
+    
+    if verification.used_at is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token đã được sử dụng")
+    
+    if verification.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token đã hết hạn")
+    
+    # Cập nhật trạng thái user
+    user = await UserDocument.get(verification.user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Người dùng không tồn tại")
+    
+    user.status = "active"
+    user.updated_at = datetime.now(timezone.utc)
+    await user.save()
+    
+    # Đánh dấu token đã sử dụng
+    verification.used_at = datetime.now(timezone.utc)
+    await verification.save()
+    
+    # Gửi email chào mừng
+    await send_welcome_email(user.email, user.full_name)
+    
+    payload = user.model_dump(by_alias=True, exclude={"password_hash"})
+    payload["_id"] = str(user.id)
+    return UserResponse.model_validate(payload)
+
+
+async def request_password_reset(email: str) -> bool:
+    """Gửi email reset mật khẩu.
+    
+    Args:
+        email: Email người dùng
+        
+    Returns:
+        True nếu thành công
+    """
+    email = email.lower()
+    user = await UserDocument.find_one(UserDocument.email == email)
+    
+    # Không tiết lộ thông tin user có tồn tại hay không
+    if user is None:
+        return True
+    
+    # Tạo token reset
+    token = generate_reset_token()
+    expires_at = get_token_expiry(hours=1)  # Token reset chỉ có hiệu lực 1 giờ
+    
+    # Lưu token vào database
+    reset_token = PasswordResetTokenDocument(
+        user_id=str(user.id),
+        token=token,
+        expires_at=expires_at,
+    )
+    await reset_token.insert()
+    
+    # Gửi email
+    await send_reset_password_email(user.email, token, user.full_name)
+    
+    return True
+
+
+async def reset_password(token: str, new_password: str) -> bool:
+    """Đặt lại mật khẩu bằng token.
+    
+    Args:
+        token: Token reset
+        new_password: Mật khẩu mới
+        
+    Returns:
+        True nếu thành công
+    """
+    # Validate mật khẩu mới
+    if len(new_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Mật khẩu phải có ít nhất 8 ký tự"
+        )
+    
+    # Tìm token trong database
+    reset_token_doc = await PasswordResetTokenDocument.find_one(
+        PasswordResetTokenDocument.token == token,
+    )
+    
+    if reset_token_doc is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token không hợp lệ")
+    
+    if reset_token_doc.used_at is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token đã được sử dụng")
+    
+    if reset_token_doc.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token đã hết hạn")
+    
+    # Cập nhật mật khẩu
+    user = await UserDocument.get(reset_token_doc.user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Người dùng không tồn tại")
+    
+    user.password_hash = hash_password(new_password)
+    user.updated_at = datetime.now(timezone.utc)
+    await user.save()
+    
+    # Đánh dấu token đã sử dụng
+    reset_token_doc.used_at = datetime.now(timezone.utc)
+    await reset_token_doc.save()
+    
+    # Thu hồi tất cả refresh tokens của user (bắt buộc đăng nhập lại)
+    tokens = await RefreshTokenDocument.find(
+        RefreshTokenDocument.user_id == str(user.id)
+    ).to_list()
+    for token_doc in tokens:
+        token_doc.revoked_at = datetime.now(timezone.utc)
+        await token_doc.save()
+    
+    return True

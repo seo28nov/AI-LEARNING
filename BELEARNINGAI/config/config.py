@@ -3,11 +3,18 @@ from functools import lru_cache
 from typing import List
 
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     """Lớp Settings đọc biến môi trường cho toàn hệ thống."""
+    
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8", 
+        case_sensitive=True,
+        extra="allow"  # Cho phép extra fields từ .env
+    )
 
     app_name: str = Field(default="AI Learning Platform API", description="Tên ứng dụng phục vụ hiển thị metadata")
     environment: str = Field(default="development", description="Môi trường chạy: development/staging/production")
@@ -21,16 +28,19 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = Field(default=7, description="Thời hạn refresh token (ngày)")
 
     google_api_key: str = Field(default="", description="API key cho Google GenAI")
+    
+    # Vector Database Settings - FAISS
+    vector_persist_directory: str = Field(
+        default="./faiss_db",
+        description="Directory lưu trữ FAISS vector data (persistent storage)"
+    )
+    
     allowed_origins: List[str] = Field(default_factory=lambda: ["http://localhost:3000"], description="Danh sách origin cho CORS")
     recommender_model: str = Field(
         default="gemini-1.5-pro",
         description="Model sử dụng cho gợi ý khóa học (placeholder, override qua ENV)",
     )
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = True
+    frontend_url: str = Field(default="http://localhost:3000", description="URL frontend để tạo link email")
 
 
 @lru_cache
@@ -38,3 +48,7 @@ def get_settings() -> Settings:
     """Trả về singleton Settings, tránh đọc file nhiều lần."""
 
     return Settings()
+
+
+# Create singleton instance for backward compatibility
+settings = get_settings()
